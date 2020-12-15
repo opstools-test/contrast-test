@@ -1,0 +1,17 @@
+jobs:
+  contrast-verify:
+    executor: contrastsecurity/default
+    steps:
+      - checkout
+      - contrastsecurity/check-vulnerabilities:
+          application-id: '3fc4bb67-4d15-4d5b-a012-e211e114ce05'
+          contrast-url: 'https://ce.contrastsecurity.com/Contrast'
+          org-id: '8c140223-4abd-4c9c-a405-95fced14b882'
+          severities: 'CRITICAL,HIGH,MEDIUM'
+orbs:
+  verify: contrastsecurity/verify@0.3.0
+version: 2.1
+workflows:
+  test:
+    jobs:
+      - contrast-verify

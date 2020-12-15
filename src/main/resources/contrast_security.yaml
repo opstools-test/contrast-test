@@ -1,0 +1,10 @@
+api: 
+  url: https://ce.contrastsecurity.com/Contrast
+  api_key: C2VK4SX0zAjaAuIH414kgGh0S9PfCvhl
+  service_key: EABHU4RFW5HZ69XA
+  user_name: agent_ce734b20-07ee-4f08-b8d9-6371fb90361b@TakumisOrg
+  proxy:
+    enable: true
+    url: http://127.0.0.1:8080
+    user: {user}
+    pass: {password}
