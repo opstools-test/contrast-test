@@ -1,17 +1,232 @@
-jobs:
-  contrast-verify:
-    executor: contrastsecurity/default
+# This code is licensed from CircleCI to the user under the MIT license.
+# See here for details: https://circleci.com/developer/ja/orbs/licensing
+commands:
+  check-vulnerabilities:
+    description: |
+      After running your tests, query the Contrast API to see if any new vulnerabilities were found in your build. Requirements: Python, pip
+    parameters:
+      api-key:
+        default: CONTRAST_API_KEY
+        description: |
+          Name of environment variable storing your Contrast API key
+        type: env_var_name
+      application-id:
+        default: ""
+        description: |
+          ID of your application in Contrast
+        type: string
+      contrast-url:
+        default: https://app.contrastsecurity.com/Contrast
+        description: |
+          The Contrast url for your instance. The default is https://app.contrastsecurity.com/Contrast
+        type: string
+      org-id:
+        default: ""
+        description: |
+          The organization id for your Contrast organization. This can be found on the "Your Account" page in the Contrast UI.
+        type: string
+      python-path:
+        default: /usr/local/bin/python
+        description: |
+          Absolute path to an installed Python shell
+        type: string
+      service-key:
+        default: CONTRAST_SERVICE_KEY
+        description: |
+          Name of environment variable storing your Contrast service key
+        type: env_var_name
+      severities:
+        default: CRITICAL,HIGH,MEDIUM,LOW,NOTE
+        description: |
+          A comma-delimited list of serverities to use when filtering for vulnerabilities.
+        type: string
+      username:
+        default: CONTRAST_USERNAME
+        description: |
+          Name of environment variable storing your Contrast username
+        type: env_var_name
+      vulnerability-threshold:
+        default: 0
+        description: |
+          For what number or greater of open vulnerabilities would you like your build to fail?
+        type: integer
     steps:
-      - checkout
-      - contrastsecurity/check-vulnerabilities:
-          application-id: '3fc4bb67-4d15-4d5b-a012-e211e114ce05'
-          contrast-url: 'https://ce.contrastsecurity.com/Contrast'
-          org-id: '8c140223-4abd-4c9c-a405-95fced14b882'
-          severities: 'CRITICAL,HIGH,MEDIUM'
+    - run:
+        command: |
+          if [[ $EUID == 0 ]]; then export SUDO=""; else export SUDO="sudo"; fi
+
+          $SUDO pip install requests
+        name: Check for Python presence
+    - run:
+        command: |
+          if [[ $EUID == 0 ]]; then export SUDO=""; else export SUDO="sudo"; fi
+
+          $SUDO pip install requests
+        name: Install Python modules
+    - run:
+        command: |
+          import base64
+          import datetime
+          import json
+          import requests
+          import urllib
+          import sys
+          import os
+
+          # Set the severities you are interested in
+          SEVERITIES = os.path.expandvars("${<<parameters.severities>>}")
+
+          headers = {
+           'Accept': 'application/json',
+           'API-Key': os.path.expandvars("${<<parameters.api-key>>}"),
+           'Authorization': base64.b64encode(os.path.expandvars("${<<parameters.username>>}:${<<parameters.service-key>>}"))
+          }
+
+          # Contrast Security API request to get vulnerabilities
+          url = "<<parameters.contrast-url>>/api/ng/<<parameters.org-id>>/traces/<<parameters.application-id>>/quick?severities=<<parameters.severities>>"
+
+          print ('HTTP GET ' + url)
+          response = requests.get(url, headers = headers)
+
+          # Check the status of the request
+          if (not response.ok):
+           print ('We could not contact Contrast. Please make sure contrast-url, application-id, org-id, and all credentials are correct')
+           sys.exit(1)
+
+          # Parse the JSON content
+          json_data = json.loads(response.content)
+
+          vulns_all = 0
+          vulns_open = 0
+
+          for filter in json_data['filters']:
+           if (filter['name'] == 'All'):
+            vulns_all = filter['count']
+           elif (filter['name'] == 'Open'):
+            vulns_open = filter['count']
+
+          print ('All vulnerabilities: ' + str(vulns_all))
+          print ('Open vulnerabilities: ' + str(vulns_open))
+
+          # TODO Set the threshold for the number of vulnerabilities (of given severities)
+          if (vulns_open > <<parameters.vulnerability-threshold>>):
+           print("Above the vulnerabilities threshold. Failing build.")
+           sys.exit(1)
+        name: Check Contrast for vulnerabilities
+        shell: <<parameters.python-path>>
+description: |
+  Install and configure/use Contrast Security on CircleCI https://contrastsecurity.com
+  The Contrast agent begins securing your code by adding sensors to the entire software stack of your applications - from runtime to custom code - to directly measure vulnerabilities and attacks. Contrast Assess continuously monitors all your code, including your libraries, for known and unknown vulnerabilities, and produces accurate results without dependence on application security experts.
+  You can find this orb's source code in the following GitHub repository https://github.com/Contrast-Security-OSS/contrast-security-orb
+examples:
+  run-tests-check-vulnerabilities:
+    description: |
+      Query the Contrast API to check if vulnerabilites have been found in this application.  If vulnerabilites have been found above the set threshold, then fail the build.
+    usage:
+      jobs:
+        contrast-verify:
+          executor: contrastsecurity/default
+          steps:
+          - checkout
+          - contrastsecurity/check-vulnerabilities:
+              application-id: (your application id)
+              contrast-url: https://app.contrastsecurity.com/Contrast
+              org-id: (your org id)
+              severities: CRITICAL,HIGH,MEDIUM
+      orbs:
+        contrastsecurity: contrastsecurity/verify@x.y.z
+      version: 2.1
+      workflows:
+        test:
+          jobs:
+          - contrast-verify
+executors:
+  default:
+    description: |
+      CircleCI's Python convenience image: https://hub.docker.com/r/circleci/python
+    docker:
+    - image: <<parameters.image>>:<<parameters.tag>>
+    parameters:
+      image:
+        default: circleci/python
+        description: The name of image
+        type: string
+      tag:
+        default: 2.7.16-jessie-node-browsers-legacy
+        description: The image version tag
+        type: string
+jobs:
+  check-vulnerabilities:
+    description: |
+      After running your tests, query the Contrast API to see if any new vulnerabilities were found in your build
+    executor: <<parameters.executor>>
+    parameters:
+      api-key:
+        default: CONTRAST_API_KEY
+        description: |
+          Name of environment variable storing your Contrast API key
+        type: env_var_name
+      application-id:
+        default: ""
+        description: |
+          ID of your application in Contrast
+        type: string
+      contrast-url:
+        default: https://app.contrastsecurity.com/Contrast
+        description: |
+          The Contrast url for your instance. The default is https://app.contrastsecurity.com/Contrast
+        type: string
+      executor:
+        default: default
+        description: |
+          Executor within which to run this job, defaults to this orb's own `default` executor. The given execution environment should have Python and pip preinstalled.
+        type: executor
+      org-id:
+        default: ""
+        description: |
+          The organization id for your Contrast organization. This can be found on the "Your Account" page in the Contrast UI.
+        type: string
+      python-path:
+        default: /usr/local/bin/python
+        description: |
+          Absolute path to an installed Python shell
+        type: string
+      service-key:
+        default: CONTRAST_SERVICE_KEY
+        description: |
+          Name of environment variable storing your Contrast service key
+        type: env_var_name
+      severities:
+        default: CRITICAL,HIGH,MEDIUM,LOW,NOTE
+        description: |
+          A comma-delimited list of serverities to use when filtering for vulnerabilities.
+        type: string
+      username:
+        default: CONTRAST_USERNAME
+        description: |
+          Name of environment variable storing your Contrast username
+        type: env_var_name
+      vulnerability-threshold:
+        default: 0
+        description: |
+          For what number or greater of open vulnerabilities would you like your build to fail?
+        type: integer
+    steps:
+    - check-vulnerabilities:
+        api-key: <<parameters.api-key>>
+        application-id: <<parameters.application-id>>
+        contrast-url: <<parameters.contrast-url>>
+        org-id: <<parameters.org-id>>
+        python-path: <<parameters.python-path>>
+        service-key: <<parameters.service-key>>
+        severities: <<parameters.severities>>
+        username: <<parameters.username>>
+        vulnerability-threshold: <<parameters.vulnerability-threshold>>
+
 orbs:
   verify: contrastsecurity/verify@0.3.0
 version: 2.1
 workflows:
   test:
     jobs:
-      - contrast-verify
+      - check-vulnerabilities
